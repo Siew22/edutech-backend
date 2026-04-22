@@ -206,40 +206,43 @@ app.post('/api/admin/create', async (req, res) => {
 
 // [GET] /api/orders (仅限管理员获取所有订单)
 app.get('/api/orders', async (req, res) => {
-    // 未来可以加入 JWT 验证，确保只有 admin 能调用
     const [rows] = await pool.query(`
-        SELECT o.id, u.name as buyer, o.country, o.total_amount, o.shipping_method, o.order_date
+        SELECT o.id, u.name as buyer, o.country, o.total_amount, o.shipping_method, o.payment_method, o.order_date
         FROM orders o
         JOIN users u ON o.user_id = u.id
         ORDER BY o.order_date DESC
-    `);
+    `); // 🚨 SELECT 增加了 o.payment_method
     res.json(rows);
 });
 
 // [POST] /api/orders (创建新订单)
 app.post('/api/orders', async (req, res) => {
-    const { userId, cart, shippingDetails } = req.body;
+    // 🚨 增加了 paymentMethod
+    const { userId, cart, shippingDetails, paymentMethod } = req.body;
     const totalAmount = cart.reduce((sum, item) => sum + Number(item.price), 0);
     
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
-
-        // 插入订单主表
+        // 🚨 SQL 增加了 payment_method 字段
         const [orderResult] = await connection.query(
-            'INSERT INTO orders (user_id, total_amount, address, country, shipping_method) VALUES (?, ?, ?, ?, ?)',
-            [userId, totalAmount, shippingDetails.address, shippingDetails.country, shippingDetails.shippingMethod]
+            'INSERT INTO orders (user_id, total_amount, address, country, shipping_method, payment_method) VALUES (?, ?, ?, ?, ?, ?)',
+            [userId, totalAmount, shippingDetails.address, shippingDetails.country, shippingDetails.shippingMethod, paymentMethod]
         );
         const orderId = orderResult.insertId;
 
-        // 插入订单详情表
+        // 插入订单详情表 (升级版逻辑)
         for (const item of cart) {
+            // 🚨 核心升级：通过 item.type 判断是书还是课
             await connection.query(
-                'INSERT INTO order_items (order_id, book_id, quantity, price_at_purchase) VALUES (?, ?, ?, ?)',
-                [orderId, item.id, 1, item.price]
+                'INSERT INTO order_items (order_id, item_id, item_type, quantity, price_at_purchase) VALUES (?, ?, ?, ?, ?)',
+                [orderId, item.id, item.type, 1, item.price]
             );
-            // 减库存
-            await connection.query('UPDATE books SET stock_quantity = stock_quantity - 1 WHERE id = ?', [item.id]);
+            
+            // 如果是书，才需要减库存
+            if (item.type === 'book') {
+                await connection.query('UPDATE books SET stock_quantity = stock_quantity - 1 WHERE id = ?', [item.id]);
+            }
         }
 
         await connection.commit();
