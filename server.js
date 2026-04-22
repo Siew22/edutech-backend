@@ -256,8 +256,13 @@ app.post('/api/orders', async (req, res) => {
 // --- 4. 文件上传 API ---
 app.post('/api/upload', upload.single('media'), (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded.');
-    const fileUrl = `/uploads/${req.file.filename}`;
-    res.json({ message: 'Upload successful', url: fileUrl });
+
+    // 🚨 核心：从环境变量里读取公网 URL，并拼接成一个绝对地址！
+    const publicUrl = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+    const absoluteFileUrl = `${publicUrl}/uploads/${req.file.filename}`;
+    
+    // 返回这个绝对地址给前端
+    res.json({ message: 'Upload successful', url: absoluteFileUrl });
 });
 
 // =================================================================
