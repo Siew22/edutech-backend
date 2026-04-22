@@ -40,9 +40,12 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => { cb(null, Date.now() + path.extname(file.originalname)); }
 });
 const upload = multer({ storage: storage });
-// 🚨 升级：给上传的照片增加 Header，尝试跳过 Ngrok 的拦截页面
+// 🚨 升级版：为静态文件夹增加跳过 Ngrok 警告的 Header
 app.use('/uploads', (req, res, next) => {
+    // 这个 Header 能让浏览器请求图片时，Ngrok 不再弹出那个“中间警告页”
     res.setHeader('ngrok-skip-browser-warning', 'true');
+    // 同时也加上 CORS 许可，防止 Vercel 跨域拦截
+    res.setHeader('Access-Control-Allow-Origin', '*');
     next();
 }, express.static(path.join(__dirname, 'uploads')));
 
