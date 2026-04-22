@@ -40,11 +40,11 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => { cb(null, Date.now() + path.extname(file.originalname)); }
 });
 const upload = multer({ storage: storage });
-// 🚨 升级版：为静态文件夹增加跳过 Ngrok 警告的 Header
+// 🚨 终极解决方案：为上传的图片强制加上“跳过 Ngrok 警告”的通行证
 app.use('/uploads', (req, res, next) => {
-    // 这个 Header 能让浏览器请求图片时，Ngrok 不再弹出那个“中间警告页”
+    // 这个 Header 能让 Ngrok 直接返回图片，而不显示那个烦人的蓝屏警告
     res.setHeader('ngrok-skip-browser-warning', 'true');
-    // 同时也加上 CORS 许可，防止 Vercel 跨域拦截
+    // 允许 Vercel 跨域访问图片
     res.setHeader('Access-Control-Allow-Origin', '*');
     next();
 }, express.static(path.join(__dirname, 'uploads')));
