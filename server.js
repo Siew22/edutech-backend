@@ -151,6 +151,36 @@ app.get('/api/messages', async (req, res) => {
     }
 });
 
+// ================= 搜索 API (核心功能) =================
+app.get('/api/search', async (req, res) => {
+    const query = req.query.q; // 拿到 ?q=关键词
+    if (!query) {
+        return res.json([]); // 如果没传关键词，返回空数组
+    }
+
+    try {
+        const searchTerm = `%${query}%`; // 加上模糊搜索的 %
+
+        // 同时在 3 个表里进行模糊搜索
+        const [books] = await pool.query("SELECT id, title, price, cover_image_url as img FROM books WHERE title LIKE ?", [searchTerm]);
+        const [courses] = await pool.query("SELECT id, title, price, img, duration, tag FROM courses WHERE title LIKE ?", [searchTerm]);
+        const [resources] = await pool.query("SELECT id, title, price, img, duration, tag FROM resources WHERE title LIKE ?", [searchTerm]);
+
+        // 给每个结果打上类型标签，方便前端显示
+        const formattedBooks = books.map(item => ({ ...item, type: 'Book' }));
+        const formattedCourses = courses.map(item => ({ ...item, type: 'Course' }));
+        const formattedResources = resources.map(item => ({ ...item, type: 'Resource' }));
+
+        // 合并所有结果
+        const results = [...formattedBooks, ...formattedCourses, ...formattedResources];
+        
+        res.json(results);
+    } catch (error) {
+        console.error("Search Error:", error);
+        res.status(500).json({ message: 'Error during search' });
+    }
+});
+
 // 发送新消息
 app.post('/api/messages', async (req, res) => {
     const { userName, message } = req.body;
