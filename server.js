@@ -126,23 +126,19 @@ app.get('/api/events', async (req, res) => { const [rows] = await pool.query('SE
 
 // ================= 真正的管理员添加功能 (POST) =================
 app.post('/api/admin/add', async (req, res) => {
-    // 🚨 新增：从 req.body 接收 category 和 duration
     const { type, title, price, img, extra, event_date, start_time, end_time, category, duration } = req.body;
     try {
         if (type === 'Book') {
             await pool.query('INSERT INTO books (title, price, cover_image_url, category) VALUES (?, ?, ?, ?)', [title, price || 0, img, category || 'General']);
         } else if (type === 'Course') {
-            // 🚨 新增：把 category 存进 tag 列，duration 存进 duration 列
             await pool.query('INSERT INTO courses (title, price, img, tag, duration) VALUES (?, ?, ?, ?, ?)',[title, price || 0, img, category || 'COURSE', duration || 'Self-paced']);
         } else if (type === 'Resource') {
-            // 🚨 新增：把 category 存进 tag 列，duration 存进 duration 列
-            await pool.query('INSERT INTO resources (title, price, img, tag, duration) VALUES (?, ?, ?, ?, ?)',[title, 0, img, category || 'RESOURCE', duration || 'Read']);
+            // 🚨🚨🚨 核心修复：原来这里写死了 0，现在改成接收前端传来的 price 🚨🚨🚨
+            await pool.query('INSERT INTO resources (title, price, img, tag, duration) VALUES (?, ?, ?, ?, ?)',[title, price || 0, img, category || 'RESOURCE', duration || 'Read']);
         } else if (type === 'News') {
             const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
             await pool.query('INSERT INTO news (title, excerpt, full_content, img, news_date) VALUES (?, ?, ?, ?, ?)', [title, extra, 'Full content goes here...', img, today]);
-        } 
-        // 🚨 新增：处理 Event 的保存
-        else if (type === 'Event') {
+        } else if (type === 'Event') {
             await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details) VALUES (?, ?, ?, ?, ?)', [title, event_date, start_time, end_time, extra]);
         }
         res.json({ message: `${type} added successfully to database!` });
