@@ -257,12 +257,11 @@ app.post('/api/orders', async (req, res) => {
 app.post('/api/upload', upload.single('media'), (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded.');
 
-    // 🚨 核心：从环境变量里读取公网 URL，并拼接成一个绝对地址！
-    const publicUrl = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
-    const absoluteFileUrl = `${publicUrl}/uploads/${req.file.filename}`;
+    // 🚨 既然是固定域名，直接写死绝对路径，确保存入数据库的是公网直连地址
+    const fixedDomain = "https://juliette-unattempted-tammara.ngrok-free.dev";
+    const fileUrl = `${fixedDomain}/uploads/${req.file.filename}`;
     
-    // 返回这个绝对地址给前端
-    res.json({ message: 'Upload successful', url: absoluteFileUrl });
+    res.json({ message: 'Upload successful', url: fileUrl });
 });
 
 // =================================================================
