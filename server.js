@@ -130,6 +130,27 @@ app.get('/api/resources', async (req, res) => { const [rows] = await pool.query(
 app.get('/api/news', async (req, res) => { const [rows] = await pool.query('SELECT * FROM news ORDER BY id DESC'); res.json(rows); });
 // 🚨 新增：获取日历事件
 app.get('/api/events', async (req, res) => { const [rows] = await pool.query('SELECT * FROM events'); res.json(rows); });
+// ================= 论坛 API (纯 HTTP，无 Socket) =================
+// 获取最新消息
+app.get('/api/messages', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM forum_messages ORDER BY created_at ASC LIMIT 100');
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching messages' });
+    }
+});
+
+// 发送新消息
+app.post('/api/messages', async (req, res) => {
+    const { userName, message } = req.body;
+    try {
+        await pool.query('INSERT INTO forum_messages (user_name, message) VALUES (?, ?)',[userName, message]);
+        res.status(201).json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: 'Error saving message' });
+    }
+});
 
 // ================= 真正的管理员添加功能 (POST) =================
 app.post('/api/admin/add', async (req, res) => {
