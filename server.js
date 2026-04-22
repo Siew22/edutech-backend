@@ -133,20 +133,26 @@ app.get('/api/events', async (req, res) => { const [rows] = await pool.query('SE
 
 // ================= 真正的管理员添加功能 (POST) =================
 app.post('/api/admin/add', async (req, res) => {
-    const { type, title, price, img, extra, event_date, start_time, end_time, category, duration } = req.body;
+    // 🚨 1. 接收从前端传来的 description
+    const { type, title, price, img, extra, event_date, start_time, end_time, category, duration, description } = req.body;
     try {
         if (type === 'Book') {
-            await pool.query('INSERT INTO books (title, price, cover_image_url, category) VALUES (?, ?, ?, ?)', [title, price || 0, img, category || 'General']);
+            await pool.query('INSERT INTO books (title, price, cover_image_url, category) VALUES (?, ?, ?, ?)',[title, price || 0, img, category || 'General']);
         } else if (type === 'Course') {
-            await pool.query('INSERT INTO courses (title, price, img, tag, duration) VALUES (?, ?, ?, ?, ?)',[title, price || 0, img, category || 'COURSE', duration || 'Self-paced']);
+            // 🚨 2. 把 description 存入 courses 表
+            await pool.query(
+                'INSERT INTO courses (title, price, img, tag, duration, description) VALUES (?, ?, ?, ?, ?, ?)',[title, price || 0, img, category || 'COURSE', duration || 'Self-paced', description || '']
+            );
         } else if (type === 'Resource') {
-            // 🚨🚨🚨 核心修复：原来这里写死了 0，现在改成接收前端传来的 price 🚨🚨🚨
-            await pool.query('INSERT INTO resources (title, price, img, tag, duration) VALUES (?, ?, ?, ?, ?)',[title, price || 0, img, category || 'RESOURCE', duration || 'Read']);
+            // 🚨 3. 把 description 存入 resources 表
+            await pool.query(
+                'INSERT INTO resources (title, price, img, tag, duration, description) VALUES (?, ?, ?, ?, ?, ?)',[title, price || 0, img, category || 'RESOURCE', duration || 'Read', description || '']
+            );
         } else if (type === 'News') {
             const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
             await pool.query('INSERT INTO news (title, excerpt, full_content, img, news_date) VALUES (?, ?, ?, ?, ?)', [title, extra, 'Full content goes here...', img, today]);
         } else if (type === 'Event') {
-            await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details) VALUES (?, ?, ?, ?, ?)', [title, event_date, start_time, end_time, extra]);
+            await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details) VALUES (?, ?, ?, ?, ?)',[title, event_date, start_time, end_time, extra]);
         }
         res.json({ message: `${type} added successfully to database!` });
     } catch (error) {
