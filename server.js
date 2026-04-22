@@ -133,12 +133,14 @@ app.get('/api/events', async (req, res) => { const [rows] = await pool.query('SE
 // ================= 论坛 API (纯 HTTP，无 Socket) =================
 // 获取最新消息
 // 获取最新消息
+// 获取最新消息
 app.get('/api/messages', async (req, res) => {
     try {
-        // 🚨 魔法在这里：用 DATE_FORMAT 把 created_at 强制变成国际标准格式
+        // 🚨 终极魔法：直接让 MySQL 返回 Unix 毫秒级时间戳！
+        // 纯数字，没有任何时区格式解析烦恼！
         const sql = `
             SELECT id, user_name, message, 
-                   DATE_FORMAT(CONVERT_TZ(created_at, '@@session.time_zone', '+00:00'), '%Y-%m-%dT%T.000Z') AS created_at 
+                   UNIX_TIMESTAMP(created_at) * 1000 AS created_at 
             FROM forum_messages 
             ORDER BY created_at ASC 
             LIMIT 100
@@ -146,7 +148,7 @@ app.get('/api/messages', async (req, res) => {
         const [rows] = await pool.query(sql);
         res.json(rows);
     } catch (error) {
-        console.error("Error formatting date:", error); // 加上更详细的报错
+        console.error("Error fetching messages:", error);
         res.status(500).json({ message: 'Error fetching messages' });
     }
 });
