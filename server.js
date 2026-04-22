@@ -212,11 +212,13 @@ app.post('/api/admin/create', async (req, res) => {
         return res.status(400).json({ message: 'All fields are required.' });
     }
 
+    // 🚨🚨🚨 终极后端防线：如果不是 @edutech.com，直接拒绝请求并报警！
+    if (!email.toLowerCase().endsWith('@edutech.com')) {
+        return res.status(403).json({ message: 'CRITICAL SECURITY ERROR: Unauthorized domain. Only @edutech.com is permitted for Admin accounts.' });
+    }
+
     try {
-        // 1. 给新管理员的密码进行真实加密！
         const password_hash = await bcrypt.hash(password, 10);
-        
-        // 2. 插入数据库，并强制赋予 'admin' 角色！
         await pool.query(
             "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')",
             [name, email, password_hash]
