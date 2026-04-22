@@ -257,9 +257,9 @@ app.post('/api/orders', async (req, res) => {
 app.post('/api/upload', upload.single('media'), (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded.');
 
-    // 🚨 既然是固定域名，直接写死绝对路径，确保存入数据库的是公网直连地址
-    const fixedDomain = "https://juliette-unattempted-tammara.ngrok-free.dev";
-    const fileUrl = `${fixedDomain}/uploads/${req.file.filename}`;
+    // 🚨 这一行非常关键：它会自动读取 docker-compose 里的 PUBLIC_URL
+    const publicUrl = process.env.PUBLIC_URL || `http://localhost:5000`;
+    const fileUrl = `${publicUrl}/uploads/${req.file.filename}`;
     
     res.json({ message: 'Upload successful', url: fileUrl });
 });
