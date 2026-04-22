@@ -40,7 +40,11 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => { cb(null, Date.now() + path.extname(file.originalname)); }
 });
 const upload = multer({ storage: storage });
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // 开放 uploads 文件夹
+// 🚨 升级：给上传的照片增加 Header，尝试跳过 Ngrok 的拦截页面
+app.use('/uploads', (req, res, next) => {
+    res.setHeader('ngrok-skip-browser-warning', 'true');
+    next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // =================================================================
 //                         API 路由定义
