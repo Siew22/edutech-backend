@@ -132,11 +132,21 @@ app.get('/api/news', async (req, res) => { const [rows] = await pool.query('SELE
 app.get('/api/events', async (req, res) => { const [rows] = await pool.query('SELECT * FROM events'); res.json(rows); });
 // ================= 论坛 API (纯 HTTP，无 Socket) =================
 // 获取最新消息
+// 获取最新消息
 app.get('/api/messages', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM forum_messages ORDER BY created_at ASC LIMIT 100');
+        // 🚨 魔法在这里：用 DATE_FORMAT 把 created_at 强制变成国际标准格式
+        const sql = `
+            SELECT id, user_name, message, 
+                   DATE_FORMAT(CONVERT_TZ(created_at, '@@session.time_zone', '+00:00'), '%Y-%m-%dT%T.000Z') AS created_at 
+            FROM forum_messages 
+            ORDER BY created_at ASC 
+            LIMIT 100
+        `;
+        const [rows] = await pool.query(sql);
         res.json(rows);
     } catch (error) {
+        console.error("Error formatting date:", error); // 加上更详细的报错
         res.status(500).json({ message: 'Error fetching messages' });
     }
 });
