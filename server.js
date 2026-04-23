@@ -183,6 +183,81 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
+// ================= 全新的 LMS API 模块 =================
+
+// 1. 获取“我的学习”内容 (核心安全接口)
+app.get('/api/my-learning', async (req, res) => {
+    // ⭐️ 实际开发中，这里应该用 JWT Token 来验证用户身份
+    // ⭐️ 为了简化，我们暂时从 query 参数里获取 userId
+    const userId = req.query.userId;
+    if (!userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    try {
+        // 查找该用户购买过的所有项目
+        const [orderItems] = await pool.query(
+            `SELECT oi.item_id, oi.item_type 
+             FROM order_items oi
+             JOIN orders o ON oi.order_id = o.id
+             WHERE o.user_id = ?`, [userId]
+        );
+
+        // 分类存放 ID
+        const bookIds = orderItems.filter(i => i.item_type === 'book').map(i => i.item_id);
+        const courseIds = orderItems.filter(i => i.item_type === 'course').map(i => i.item_id);
+        const resourceIds = orderItems.filter(i => i.item_type === 'resource').map(i => i.item_id);
+
+        let purchasedItems = [];
+
+        // 根据 ID 去各个表里捞出【完整】的数据（包含所有秘密链接）
+        if (bookIds.length > 0) {
+            const [books] = await pool.query("SELECT *, 'book' as type FROM books WHERE id IN (?)", [bookIds]);
+            purchasedItems.push(...books);
+        }
+        if (courseIds.length > 0) {
+            const [courses] = await pool.query("SELECT *, 'course' as type FROM courses WHERE id IN (?)", [courseIds]);
+            purchasedItems.push(...courses);
+        }
+        if (resourceIds.length > 0) {
+            const [resources] = await pool.query("SELECT *, 'resource' as type FROM resources WHERE id IN (?)", [resourceIds]);
+            purchasedItems.push(...resources);
+        }
+
+        res.json(purchasedItems);
+
+    } catch (error) {
+        console.error('My Learning Fetch Error:', error);
+        res.status(500).json({ message: 'Failed to fetch learning materials.' });
+    }
+});
+
+// 2. 学生提交测验成绩
+app.post('/api/quiz/submit', async (req, res) => {
+    const { userId, userName, itemId, itemTitle, itemType, score } = req.body;
+    try {
+        await pool.query(
+            'INSERT INTO quiz_submissions (user_id, user_name, item_id, item_title, item_type, score) VALUES (?, ?, ?, ?, ?, ?)',
+            [userId, userName, itemId, itemTitle, itemType, score]
+        );
+        res.status(201).json({ message: 'Score submitted successfully!' });
+    } catch (error) {
+        console.error('Quiz Submit Error:', error);
+        res.status(500).json({ message: 'Failed to submit score.' });
+    }
+});
+
+// 3. Admin 获取所有学生的成绩
+app.get('/api/quiz/submissions', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM quiz_submissions ORDER BY submitted_at DESC');
+        res.json(rows);
+    } catch (error) {
+        console.error('Fetch Submissions Error:', error);
+        res.status(500).json({ message: 'Failed to fetch submissions.' });
+    }
+});
+
 // 发送新消息
 app.post('/api/messages', async (req, res) => {
     const { userName, message } = req.body;
@@ -194,22 +269,25 @@ app.post('/api/messages', async (req, res) => {
     }
 });
 
-// ================= 真正的管理员添加功能 (POST) =================
+// ================= 真正的管理员添加功能 (POST) - LMS 升级版 =================
 app.post('/api/admin/add', async (req, res) => {
-    // 🚨 1. 接收从前端传来的 description
-    const { type, title, price, img, extra, event_date, start_time, end_time, category, duration, description } = req.body;
+    // 接收所有新字段
+    const { type, title, price, img, category, duration, description, video_url, tutorial_pdf_url, quiz_url, softcopy_pdf_url } = req.body;
     try {
         if (type === 'Book') {
-            await pool.query('INSERT INTO books (title, price, cover_image_url, category) VALUES (?, ?, ?, ?)',[title, price || 0, img, category || 'General']);
-        } else if (type === 'Course') {
-            // 🚨 2. 把 description 存入 courses 表
             await pool.query(
-                'INSERT INTO courses (title, price, img, tag, duration, description) VALUES (?, ?, ?, ?, ?, ?)',[title, price || 0, img, category || 'COURSE', duration || 'Self-paced', description || '']
+                'INSERT INTO books (title, price, cover_image_url, category, softcopy_pdf_url) VALUES (?, ?, ?, ?, ?)',
+                [title, price || 0, img, category || 'General', softcopy_pdf_url]
+            );
+        } else if (type === 'Course') {
+            await pool.query(
+                'INSERT INTO courses (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [title, price || 0, img, category || 'COURSE', duration, description, video_url, tutorial_pdf_url, quiz_url]
             );
         } else if (type === 'Resource') {
-            // 🚨 3. 把 description 存入 resources 表
             await pool.query(
-                'INSERT INTO resources (title, price, img, tag, duration, description) VALUES (?, ?, ?, ?, ?, ?)',[title, price || 0, img, category || 'RESOURCE', duration || 'Read', description || '']
+                'INSERT INTO resources (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [title, price || 0, img, category || 'RESOURCE', duration, description, video_url, tutorial_pdf_url, quiz_url]
             );
         } else if (type === 'News') {
             const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
@@ -331,15 +409,21 @@ app.post('/api/orders', async (req, res) => {
 });
 
 
-// --- 4. 文件上传 API ---
+// --- 4. 文件上传 API (升级版，可处理任何文件) ---
 app.post('/api/upload', upload.single('media'), (req, res) => {
-    if (!req.file) return res.status(400).send('No file uploaded.');
-
-    // 🚨 这一行非常关键：它会自动读取 docker-compose 里的 PUBLIC_URL
-    const publicUrl = process.env.PUBLIC_URL || `http://localhost:5000`;
+    if (!req.file) {
+        return res.status(400).send('No file uploaded.');
+    }
+    // 自动读取 docker-compose 里的 PUBLIC_URL，生成公网可访问的完整链接
+    const publicUrl = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
     const fileUrl = `${publicUrl}/uploads/${req.file.filename}`;
     
-    res.json({ message: 'Upload successful', url: fileUrl });
+    // 返回【文件名】和【完整公网URL】
+    res.json({ 
+        message: 'Upload successful', 
+        url: fileUrl, 
+        path: `/uploads/${req.file.filename}` // 这个相对路径将来存数据库
+    });
 });
 
 // =================================================================
