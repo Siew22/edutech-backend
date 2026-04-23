@@ -374,13 +374,12 @@ app.post('/api/admin/create', async (req, res) => {
 
 // [GET] /api/orders (仅限管理员获取所有订单)
 app.get('/api/orders', async (req, res) => {
-    // 🚨 核心修复：补充了 o.status 字段
     const [rows] = await pool.query(`
-        SELECT o.id, u.name as buyer, o.country, o.total_amount, o.shipping_method, o.payment_method, o.order_date, o.status
+        SELECT o.id, u.name as buyer, o.country, o.total_amount, o.shipping_method, o.payment_method, o.order_date
         FROM orders o
         JOIN users u ON o.user_id = u.id
         ORDER BY o.order_date DESC
-    `); 
+    `); // 🚨 SELECT 增加了 o.payment_method
     res.json(rows);
 });
 
