@@ -216,7 +216,7 @@ app.get('/api/quiz/submissions', async (req, res) => {
 // --- 6. 管理员 (Admin) API ---
 app.post('/api/admin/add', async (req, res) => {
     // 🚨 接收全新的 targetLevel 字段
-    const { type, title, price, img, category, duration, description, video_url, tutorial_pdf_url, quiz_url, softcopy_pdf_url, targetLevel, extra, event_date, start_time, end_time } = req.body;
+    const { type, title, price, img, category, duration, description, video_url, tutorial_pdf_url, quiz_url, softcopy_pdf_url, targetLevel, extra, event_date, start_time, end_time, apply_url } = req.body;
     try {
         if (type === 'Book') {
             await pool.query(
@@ -236,8 +236,9 @@ app.post('/api/admin/add', async (req, res) => {
         } else if (type === 'News') {
         const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
         await pool.query('INSERT INTO news (title, excerpt, full_content, img, news_date) VALUES (?, ?, ?, ?, ?)',[title, req.body.extra, req.body.description, img, today]);
+        // ✅ 改成这样 (加入 img 和 apply_url)：
         } else if (type === 'Event') {
-            await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details) VALUES (?, ?, ?, ?, ?)',[title, event_date, start_time, end_time, extra]);
+            await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details, img, apply_url) VALUES (?, ?, ?, ?, ?, ?, ?)',[title, event_date, start_time, end_time, extra, img, apply_url]);
         }
         res.json({ message: `${type} added successfully to database!` });
     } catch (error) {
