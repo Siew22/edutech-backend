@@ -55,7 +55,7 @@ app.use('/uploads', (req, res, next) => {
 
 // --- 1. 认证 (Auth) API ---
 
-// [POST] /api/register (仅限学生注册)
+// [POST] /api/register (智能路由：根据邮箱后缀分配角色)
 app.post('/api/register', async (req, res) => {
     const { name, email, password } = req.body;
     
@@ -64,22 +64,28 @@ app.post('/api/register', async (req, res) => {
         return res.status(400).json({ message: 'All fields are required.' });
     }
 
-    // 2. ====== 严谨的后端邮箱验证 ======
-    if (!email.toLowerCase().endsWith('@gmail.com')) {
-        return res.status(400).json({ message: 'Security Error: Only @gmail.com domain is permitted for registration.' });
+    const lowerEmail = email.toLowerCase();
+    let role = '';
+
+    // 2. ====== 严谨的后端邮箱验证与角色智能分配 ======
+    if (lowerEmail.endsWith('@edutech.com')) {
+        role = 'admin'; // 如果是 edutech 后缀，直接赋予管理员权限
+    } else if (lowerEmail.endsWith('@gmail.com')) {
+        role = 'student'; // 如果是 gmail，就是普通学生
+    } else {
+        return res.status(400).json({ message: 'Security Error: Only @gmail.com or @edutech.com domains are permitted.' });
     }
-    // ==================================
 
     try {
         const password_hash = await bcrypt.hash(password, 10);
+        // 🚨 注意：这里插入数据库的 role 变量，是动态分配的
         await pool.query(
-            "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'student')",
-            [name, email, password_hash]
+            "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",[name, email, password_hash, role]
         );
-        res.status(201).json({ message: 'Student account created successfully! Please log in.' });
+        res.status(201).json({ message: `${role === 'admin' ? 'Admin' : 'Student'} account created successfully! Please log in.` });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(409).json({ message: 'This Gmail address is already registered.' });
+            return res.status(409).json({ message: 'This email address is already registered.' });
         }
         console.error(error);
         res.status(500).json({ message: 'Database error during registration.' });
