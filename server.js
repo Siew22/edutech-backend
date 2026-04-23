@@ -77,6 +77,7 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
+// [POST] /api/login (通用登录接口)
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -84,6 +85,20 @@ app.post('/api/login', async (req, res) => {
     }
 
     try {
+        // 🚨🚨🚨 修复：把硬编码的特权登录通道加回来！🚨🚨🚨
+        if (email.toLowerCase() === 'admin@edutech.com' && password === 'adminpass') {
+            const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', ['admin@edutech.com']);
+            const adminUser = rows[0] || { id: 1, name: 'Admin Manager', role: 'admin' };
+            return res.json({ id: adminUser.id, name: adminUser.name, email: email, role: 'admin' });
+        }
+        if (email.toLowerCase() === 'student@test.com' && password === 'studentpass') {
+             const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', ['student@test.com']);
+            const studentUser = rows[0] || { id: 2, name: 'Student User', role: 'student' };
+            return res.json({ id: studentUser.id, name: studentUser.name, email: email, role: 'student' });
+        }
+        // 🚨🚨🚨 修复结束 🚨🚨🚨
+
+        // 其他正常注册用户的验证逻辑
         const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
         const user = rows[0];
         
@@ -100,15 +115,14 @@ app.post('/api/login', async (req, res) => {
 
 
 // --- 2. 内容 (Content) API ---
-
 app.get('/api/books', async (req, res) => { const [rows] = await pool.query('SELECT * FROM books'); res.json(rows); });
 app.get('/api/courses', async (req, res) => { const [rows] = await pool.query('SELECT * FROM courses'); res.json(rows); });
 app.get('/api/resources', async (req, res) => { const [rows] = await pool.query('SELECT * FROM resources'); res.json(rows); });
 app.get('/api/news', async (req, res) => { const [rows] = await pool.query('SELECT * FROM news ORDER BY id DESC'); res.json(rows); });
 app.get('/api/events', async (req, res) => { const [rows] = await pool.query('SELECT * FROM events'); res.json(rows); });
 
-// --- 3. 论坛 (Forum) API ---
 
+// --- 3. 论坛 (Forum) API ---
 app.get('/api/messages', async (req, res) => {
     try {
         const sql = `SELECT id, user_name, message, UNIX_TIMESTAMP(created_at) * 1000 AS created_at FROM forum_messages ORDER BY created_at ASC LIMIT 100`;
@@ -129,17 +143,17 @@ app.post('/api/messages', async (req, res) => {
     }
 });
 
-// --- 4. 搜索 (Search) API ---
 
+// --- 4. 搜索 (Search) API ---
 app.get('/api/search', async (req, res) => {
     const query = req.query.q;
     if (!query) return res.json([]);
 
     try {
         const searchTerm = `%${query}%`;
-        const [books] = await pool.query("SELECT id, title, price, cover_image_url as img FROM books WHERE title LIKE ?", [searchTerm]);
-        const [courses] = await pool.query("SELECT id, title, price, img, duration, tag FROM courses WHERE title LIKE ?", [searchTerm]);
-        const [resources] = await pool.query("SELECT id, title, price, img, duration, tag FROM resources WHERE title LIKE ?", [searchTerm]);
+        const [books] = await pool.query("SELECT id, title, price, level, cover_image_url as img FROM books WHERE title LIKE ?", [searchTerm]);
+        const [courses] = await pool.query("SELECT id, title, price, level, img, duration, tag FROM courses WHERE title LIKE ?", [searchTerm]);
+        const [resources] = await pool.query("SELECT id, title, price, level, img, duration, tag FROM resources WHERE title LIKE ?", [searchTerm]);
 
         const formattedBooks = books.map(item => ({ ...item, type: 'Book' }));
         const formattedCourses = courses.map(item => ({ ...item, type: 'Course' }));
@@ -152,8 +166,8 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
-// --- 5. LMS API ---
 
+// --- 5. LMS API ---
 app.post('/api/admin/order-status', async (req, res) => {
     const { orderId, newStatus } = req.body;
     try {
@@ -175,7 +189,6 @@ app.get('/api/my-learning', async (req, res) => {
         const bookIds = orderItems.filter(i => i.item_type === 'book').map(i => i.item_id);
         const courseIds = orderItems.filter(i => i.item_type === 'course').map(i => i.item_id);
         const resourceIds = orderItems.filter(i => i.item_type === 'resource').map(i => i.item_id);
-
         let purchasedItems = [];
 
         if (bookIds.length > 0) {
@@ -218,8 +231,8 @@ app.get('/api/quiz/submissions', async (req, res) => {
     }
 });
 
-// --- 6. 管理员 (Admin) API ---
 
+// --- 6. 管理员 (Admin) API ---
 app.post('/api/admin/add', async (req, res) => {
     const { type, title, price, img, category, duration, description, video_url, tutorial_pdf_url, quiz_url, softcopy_pdf_url, targetLevel, extra, event_date, start_time, end_time } = req.body;
     try {
@@ -287,8 +300,8 @@ app.post('/api/admin/create', async (req, res) => {
     }
 });
 
-// --- 7. 订单 (Order) API ---
 
+// --- 7. 订单 (Order) API ---
 app.get('/api/orders', async (req, res) => {
     const [rows] = await pool.query(`
         SELECT o.id, u.name as buyer, o.total_amount, o.status, o.shipping_method, o.payment_method, o.order_date
@@ -327,8 +340,8 @@ app.post('/api/orders', async (req, res) => {
     }
 });
 
-// --- 8. 文件上传 (Upload) API ---
 
+// --- 8. 文件上传 (Upload) API ---
 app.post('/api/upload', upload.single('media'), (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded.');
     
@@ -339,6 +352,7 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
         path: `/uploads/${req.file.filename}`
     });
 });
+
 
 // =================================================================
 //                         启动服务器
