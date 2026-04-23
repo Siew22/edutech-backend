@@ -93,12 +93,6 @@ app.post('/api/login', async (req, res) => {
         return res.status(400).json({ message: 'Email and password are required.' });
     }
 
-    // 🚨 新增：后端 Login 严格格式验证防线
-    const lowerEmail = email.toLowerCase();
-    if (!lowerEmail.endsWith('@gmail.com') && !lowerEmail.endsWith('@edutech.com')) {
-        return res.status(403).json({ message: 'Security Error: Only @gmail.com or @edutech.com domains are permitted for login.' });
-    }
-
     try {
         // ========================================================
         // 🚀 核心修复：Admin 特权通道 (无视数据库里的假哈希)
@@ -106,8 +100,7 @@ app.post('/api/login', async (req, res) => {
         if (email === 'admin@edutech.com' && password === 'adminpass') {
             return res.json({ id: 1, name: 'Admin Manager', email: email, role: 'admin' });
         }
-        // 🚨 这里的测试账号从 student@test.com 改成了 student@gmail.com 以符合新规则
-        if (email === 'student@gmail.com' && password === 'studentpass') {
+        if (email === 'student@test.com' && password === 'studentpass') {
             return res.json({ id: 2, name: 'Student User', email: email, role: 'student' });
         }
         // ========================================================
@@ -171,10 +164,9 @@ app.get('/api/search', async (req, res) => {
         const searchTerm = `%${query}%`; // 加上模糊搜索的 %
 
         // 同时在 3 个表里进行模糊搜索
-        // 同时在 3 个表里进行模糊搜索 (增加 level 字段)
-        const [books] = await pool.query("SELECT id, title, price, cover_image_url as img, level FROM books WHERE title LIKE ?", [searchTerm]);
-        const [courses] = await pool.query("SELECT id, title, price, img, duration, tag, level FROM courses WHERE title LIKE ?", [searchTerm]);
-        const [resources] = await pool.query("SELECT id, title, price, img, duration, tag, level FROM resources WHERE title LIKE ?", [searchTerm]);
+        const [books] = await pool.query("SELECT id, title, price, cover_image_url as img FROM books WHERE title LIKE ?", [searchTerm]);
+        const [courses] = await pool.query("SELECT id, title, price, img, duration, tag FROM courses WHERE title LIKE ?", [searchTerm]);
+        const [resources] = await pool.query("SELECT id, title, price, img, duration, tag FROM resources WHERE title LIKE ?", [searchTerm]);
 
         // 给每个结果打上类型标签，方便前端显示
         const formattedBooks = books.map(item => ({ ...item, type: 'Book' }));
@@ -290,26 +282,29 @@ app.post('/api/messages', async (req, res) => {
 
 // ================= 真正的管理员添加功能 (POST) - LMS 升级版 =================
 app.post('/api/admin/add', async (req, res) => {
-    // 🚨 接收新字段 level
-    const { type, title, price, img, category, duration, description, video_url, tutorial_pdf_url, quiz_url, softcopy_pdf_url, level } = req.body;
+    // 接收所有新字段
+    const { type, title, price, img, category, duration, description, video_url, tutorial_pdf_url, quiz_url, softcopy_pdf_url } = req.body;
     try {
         if (type === 'Book') {
             await pool.query(
-                'INSERT INTO books (title, price, cover_image_url, category, softcopy_pdf_url, level) VALUES (?, ?, ?, ?, ?, ?)',[title, price || 0, img, category || 'General', softcopy_pdf_url, level || 'All']
+                'INSERT INTO books (title, price, cover_image_url, category, softcopy_pdf_url) VALUES (?, ?, ?, ?, ?)',
+                [title, price || 0, img, category || 'General', softcopy_pdf_url]
             );
         } else if (type === 'Course') {
             await pool.query(
-                'INSERT INTO courses (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',[title, price || 0, img, category || 'COURSE', duration, description, video_url, tutorial_pdf_url, quiz_url, level || 'All']
+                'INSERT INTO courses (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [title, price || 0, img, category || 'COURSE', duration, description, video_url, tutorial_pdf_url, quiz_url]
             );
         } else if (type === 'Resource') {
             await pool.query(
-                'INSERT INTO resources (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',[title, price || 0, img, category || 'RESOURCE', duration, description, video_url, tutorial_pdf_url, quiz_url, level || 'All']
+                'INSERT INTO resources (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [title, price || 0, img, category || 'RESOURCE', duration, description, video_url, tutorial_pdf_url, quiz_url]
             );
         } else if (type === 'News') {
             const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-            await pool.query('INSERT INTO news (title, excerpt, full_content, img, news_date) VALUES (?, ?, ?, ?, ?)',[title, req.body.extra, 'Full content goes here...', img, today]);
+            await pool.query('INSERT INTO news (title, excerpt, full_content, img, news_date) VALUES (?, ?, ?, ?, ?)', [title, extra, 'Full content goes here...', img, today]);
         } else if (type === 'Event') {
-            await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details) VALUES (?, ?, ?, ?, ?)',[title, req.body.event_date, req.body.start_time, req.body.end_time, req.body.extra]);
+            await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details) VALUES (?, ?, ?, ?, ?)',[title, event_date, start_time, end_time, extra]);
         }
         res.json({ message: `${type} added successfully to database!` });
     } catch (error) {
