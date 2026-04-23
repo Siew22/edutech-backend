@@ -178,78 +178,60 @@ app.post('/api/admin/order-status', async (req, res) => {
     }
 });
 
+// 1. 获取“我的学习”内容 (核心安全接口)
 app.get('/api/my-learning', async (req, res) => {
     const userId = req.query.userId;
     if (!userId) return res.status(401).json({ message: 'User not authenticated' });
-
     try {
-        const [orderItems] = await pool.query(
-            `SELECT oi.item_id, oi.item_type FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.user_id = ? AND o.status = 'Completed'`, [userId]
-        );
+        const [orderItems] = await pool.query(`SELECT oi.item_id, oi.item_type FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.user_id = ? AND o.status = 'Completed'`, [userId]);
         const bookIds = orderItems.filter(i => i.item_type === 'book').map(i => i.item_id);
         const courseIds = orderItems.filter(i => i.item_type === 'course').map(i => i.item_id);
         const resourceIds = orderItems.filter(i => i.item_type === 'resource').map(i => i.item_id);
         let purchasedItems = [];
-
-        if (bookIds.length > 0) {
-            const [books] = await pool.query("SELECT *, 'book' as type FROM books WHERE id IN (?)", [bookIds]);
-            purchasedItems.push(...books);
-        }
-        if (courseIds.length > 0) {
-            const [courses] = await pool.query("SELECT *, 'course' as type FROM courses WHERE id IN (?)", [courseIds]);
-            purchasedItems.push(...courses);
-        }
-        if (resourceIds.length > 0) {
-            const [resources] = await pool.query("SELECT *, 'resource' as type FROM resources WHERE id IN (?)", [resourceIds]);
-            purchasedItems.push(...resources);
-        }
+        if (bookIds.length > 0) { const [d] = await pool.query("SELECT *, 'book' as type FROM books WHERE id IN (?)", [bookIds]); purchasedItems.push(...d); }
+        if (courseIds.length > 0) { const [d] = await pool.query("SELECT *, 'course' as type FROM courses WHERE id IN (?)", [courseIds]); purchasedItems.push(...d); }
+        if (resourceIds.length > 0) { const [d] = await pool.query("SELECT *, 'resource' as type FROM resources WHERE id IN (?)", [resourceIds]); purchasedItems.push(...d); }
         res.json(purchasedItems);
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to fetch learning materials.' });
-    }
+    } catch (error) { res.status(500).json({ message: 'Failed to fetch learning materials.' }); }
 });
 
+// 2. 学生提交测验成绩
 app.post('/api/quiz/submit', async (req, res) => {
     const { userId, userName, itemId, itemTitle, itemType, score } = req.body;
     try {
-        await pool.query(
-            'INSERT INTO quiz_submissions (user_id, user_name, item_id, item_title, item_type, score) VALUES (?, ?, ?, ?, ?, ?)',
-            [userId, userName, itemId, itemTitle, itemType, score]
-        );
+        await pool.query('INSERT INTO quiz_submissions (user_id, user_name, item_id, item_title, item_type, score) VALUES (?, ?, ?, ?, ?, ?)', [userId, userName, itemId, itemTitle, itemType, score]);
         res.status(201).json({ message: 'Score submitted successfully!' });
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to submit score.' });
-    }
+    } catch (error) { res.status(500).json({ message: 'Failed to submit score.' }); }
 });
 
+// 3. Admin 获取所有学生的成绩
 app.get('/api/quiz/submissions', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM quiz_submissions ORDER BY submitted_at DESC');
         res.json(rows);
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to fetch submissions.' });
-    }
+    } catch (error) { res.status(500).json({ message: 'Failed to fetch submissions.' }); }
 });
 
 
 // --- 6. 管理员 (Admin) API ---
 app.post('/api/admin/add', async (req, res) => {
+    // 🚨 接收全新的 targetLevel 字段
     const { type, title, price, img, category, duration, description, video_url, tutorial_pdf_url, quiz_url, softcopy_pdf_url, targetLevel, extra, event_date, start_time, end_time } = req.body;
     try {
         if (type === 'Book') {
             await pool.query(
                 'INSERT INTO books (title, price, cover_image_url, category, softcopy_pdf_url, level) VALUES (?, ?, ?, ?, ?, ?)',
-                [title, price || 0, img, category || 'General', softcopy_pdf_url, targetLevel || 'All']
+                [title, price || 0, img, category, softcopy_pdf_url, targetLevel]
             );
         } else if (type === 'Course') {
             await pool.query(
-                'INSERT INTO courses (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [title, price || 0, img, category || 'COURSE', duration, description, video_url, tutorial_pdf_url, quiz_url, targetLevel || 'All']
+                'INSERT INTO courses (title, description, duration, price, tag, img, video_url, tutorial_pdf_url, quiz_url, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [title, description, duration, price || 0, category, img, video_url, tutorial_pdf_url, quiz_url, targetLevel]
             );
         } else if (type === 'Resource') {
             await pool.query(
-                'INSERT INTO resources (title, price, img, tag, duration, description, video_url, tutorial_pdf_url, quiz_url, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [title, price || 0, img, category || 'RESOURCE', duration, description, video_url, tutorial_pdf_url, quiz_url, targetLevel || 'All']
+                'INSERT INTO resources (title, description, duration, price, tag, img, video_url, tutorial_pdf_url, quiz_url, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [title, description, duration, price || 0, category, img, video_url, tutorial_pdf_url, quiz_url, targetLevel]
             );
         } else if (type === 'News') {
             const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
