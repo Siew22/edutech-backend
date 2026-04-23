@@ -234,8 +234,8 @@ app.post('/api/admin/add', async (req, res) => {
                 [title, description, duration, price || 0, category, img, video_url, tutorial_pdf_url, quiz_url, targetLevel]
             );
         } else if (type === 'News') {
-            const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-            await pool.query('INSERT INTO news (title, excerpt, full_content, img, news_date) VALUES (?, ?, ?, ?, ?)', [title, extra, 'Full content goes here...', img, today]);
+        const today = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+        await pool.query('INSERT INTO news (title, excerpt, full_content, img, news_date) VALUES (?, ?, ?, ?, ?)',[title, req.body.extra, req.body.description, img, today]);
         } else if (type === 'Event') {
             await pool.query('INSERT INTO events (title, event_date, start_time, end_time, details) VALUES (?, ?, ?, ?, ?)',[title, event_date, start_time, end_time, extra]);
         }
