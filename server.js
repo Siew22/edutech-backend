@@ -185,6 +185,17 @@ app.get('/api/search', async (req, res) => {
 
 // ================= 全新的 LMS API 模块 =================
 
+// [POST] /api/admin/order-status (Admin确认收款)
+app.post('/api/admin/order-status', async (req, res) => {
+    const { orderId, newStatus } = req.body;
+    try {
+        await pool.query('UPDATE orders SET status = ? WHERE id = ?', [newStatus, orderId]);
+        res.json({ message: `Order marked as ${newStatus}` });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to update order status' });
+    }
+});
+
 // 1. 获取“我的学习”内容 (核心安全接口)
 app.get('/api/my-learning', async (req, res) => {
     // ⭐️ 实际开发中，这里应该用 JWT Token 来验证用户身份
@@ -200,7 +211,7 @@ app.get('/api/my-learning', async (req, res) => {
             `SELECT oi.item_id, oi.item_type 
              FROM order_items oi
              JOIN orders o ON oi.order_id = o.id
-             WHERE o.user_id = ?`, [userId]
+             WHERE o.user_id = ? AND o.status = 'Completed'`, [userId] // 🚨 加上状态过滤
         );
 
         // 分类存放 ID
