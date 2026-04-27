@@ -286,11 +286,35 @@ app.post('/api/admin/create', async (req, res) => {
 
 // --- 7. 订单 (Order) API ---
 app.get('/api/orders', async (req, res) => {
-    const [rows] = await pool.query(`
-        SELECT o.id, u.name as buyer, o.country, o.address, o.total_amount, o.status, o.shipping_method, o.payment_method, o.order_date
-        FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.order_date DESC
-    `);
-    res.json(rows);
+    try {
+        const [orders] = await pool.query(`
+            SELECT o.id, u.name as buyer, o.country, o.address, o.total_amount, o.status, o.shipping_method, o.payment_method, o.order_date
+            FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.order_date DESC
+        `);
+
+        // 🚨 遍历每个订单，去查它里面到底买了什么
+        for (let order of orders) {
+            const [items] = await pool.query('SELECT item_id, item_type FROM order_items WHERE order_id = ?', [order.id]);
+            let itemTitles =[];
+            
+            for (let item of items) {
+                let tableName = item.item_type + 's'; // 把类型转成表名 (如: book -> books, course -> courses)
+                try {
+                    const [details] = await pool.query(`SELECT title FROM ${tableName} WHERE id = ?`,[item.item_id]);
+                    if (details.length > 0) {
+                        // 格式化输出，例如：[COURSE] Data Mining
+                        itemTitles.push(`[${item.item_type.toUpperCase()}] ${details[0].title}`);
+                    }
+                } catch(e) { console.error("Error fetching item details"); }
+            }
+            // 把多个商品用分隔符拼成一句话传给前端
+            order.purchased_items = itemTitles.join(' | ');
+        }
+
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to fetch orders' });
+    }
 });
 
 app.post('/api/orders', async (req, res) => {
